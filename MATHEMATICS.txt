@@ -1,0 +1,36 @@
+//// 1
+int a = 66528;
+int b = 52920;
+
+Console.WriteLine($"{Func(a, b)}");
+
+int Func(int a, int b)
+{
+    int bigger = a;
+    if (a < b) bigger = b;
+
+    int devider = 1;
+    for (int i = bigger; i > 0; i--)
+    {
+        if (a % i == 0 && b % i == 0)
+        {
+            devider = i;
+            break;
+        }
+    }
+    return devider;
+}
+
+//// 2
+def egcd(a, b):
+    if b == 0:
+        return (1, 0, a)
+    else:
+        x, y, g = egcd(b, a % b)
+        return (y, x - (a // b) * y, g)
+
+p = 26513
+q = 32321
+
+u, v, g = egcd(p, q)
+print(f"u = {u}, v = {v}, gcd = {g}")

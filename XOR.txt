@@ -1,0 +1,150 @@
+//// 1
+s = "label"
+key = 13
+parts = []
+for i, ch in enumerate(s):
+    orig_ord = ord(ch) # na Unicode
+    # 2) binarna reprezentacja tylko do wypisania (string)
+    orig_bin = format(orig_ord, "08b")
+    # 3) XOR na poziomie liczb (int)
+    xored_ord = orig_ord ^ key
+    # 4) binarna reprezentacja wyniku (string)
+    xored_bin = format(xored_ord, "08b")
+    # 5) konwersja wyniku XOR z powrotem na znak
+    new_char = chr(xored_ord)
+    # 6) dodajemy do listy i wypisujemy szczegóły
+    print(new_char)
+//// 2
+KEY1 = bytes.fromhex("a6c8b6733c9b22de7bc0253266a3867df55acde8635e19c73313")
+K2_XOR_K1 = bytes.fromhex("37dcb292030faa90d07eec17e3b1c6d8daf94c35d4c9191a5e1e")
+K2_XOR_K3 = bytes.fromhex("c1545756687e7573db23aa1c3452a098b71a7fbf0fddddde5fc1")
+FINAL = bytes.fromhex("04ee9855208a2cd59091d04767ae47963170d1660df7f56f5faf")
+
+KEY2 = bytes(a ^ b for a, b in zip(K2_XOR_K1, KEY1)) # poprostu XOR KEY1 z KEY2
+KEY3 = bytes(a ^ b for a, b in zip(K2_XOR_K3, KEY2)) # analog
+
+combined = bytes(a ^ b ^ c for a, b, c in zip(KEY1, KEY3, KEY2))
+FLAG = bytes(a ^ b for a, b in zip(FINAL, combined))
+
+print(FLAG.decode())
+//// 3
+hex_str = "73626960647f6b206821204f21254f7d694f7624662065622127234f726927756d"
+data = bytes.fromhex(hex_str)
+
+for key in range(256):
+    out = bytes(b ^ key for b in data)
+    print(out)
+//// 4
+# dane z zadania
+hex_str = "0e0b213f26041e480b26217f27342e175d0e070a3c5b103e2526217f27342e175d0e077e263451150104"
+data = bytes.fromhex(hex_str)
+
+# wiemy, że odszyfrowany tekst zaczyna się od "crypto{"
+known_prefix = b"crypto{"
+
+# znajdź początek klucza XOR
+key_start = bytes([d ^ k for d, k in zip(data, known_prefix)])
+print("Początek klucza:", key_start)
+
+# rozszerzamy klucz ręcznie, bo zwykle się powtarza
+# patrząc po wzorach z CryptoHack, klucz to "myXORkey" (można zgadnąć z kontekstu)
+key = b"myXORkey"
+
+# wykonujemy XOR danych z powtarzającym się kluczem
+out = bytes([b ^ key[i % len(key)] for i, b in enumerate(data)])
+
+# wypisujemy wynik
+print(out.decode())
+//// 4 XD
+from itertools import product
+
+hex_str = "0e0b213f26041e480b26217f27342e175d0e070a3c5b103e2526217f27342e175d0e077e263451150104"
+data = bytes.fromhex(hex_str)
+
+KNOWN_PREFIX = b"crypto{"      # wiemy, że plaintext zaczyna się od tego
+MIN_KEY = 1
+MAX_KEY = 40                   # szukamy długości klucza w tym zakresie
+
+def all_printable(bs):
+    return all(32 <= b <= 126 for b in bs)  # prosty test drukowalności
+
+def try_key_length(L):
+    # dla każdej reszty r (0..L-1) zbieramy bajty ciphertextu z tej klasy
+    residue_bytes = [data[r::L] for r in range(L)]
+
+    # dla każdej reszty znajdujemy wszystkie klucze k (0..255) które dają drukowalne wyniki
+    candidates = []
+    for r_bytes in residue_bytes:
+        possible = [k for k in range(256) if all_printable(bytes(b ^ k for b in r_bytes))]
+        if not possible:
+            return None   # jeśli dla jakiejś reszty nie ma klucza, L nie pasuje
+        candidates.append(possible)
+
+    # pruning: jeżeli znamy prefix, wymuśmy zgodność dla pierwszych len(KNOWN_PREFIX) pozycji
+    prefix_len = len(KNOWN_PREFIX)
+    # Funkcja backtrackująca wybiera jedną wartość klucza dla każdej reszty
+    key = [None] * L
+
+    # porządek wyboru: najpierw te reszty, które występują w prefiksie (większe prune)
+    residues_order = sorted(range(L), key=lambda r: (-(prefix_len - r - 1 >= 0)))  # proste: daj priorytet tym w prefiksie
+
+    def dfs(idx):
+        if idx == len(residues_order):
+            # mamy kompletny klucz - sprawdźmy całość
+            full_key = bytes(key[r % L] for r in range(L))
+            plain = bytes(data[i] ^ full_key[i % L] for i in range(len(data)))
+            if plain.startswith(KNOWN_PREFIX) and b"}" in plain and all_printable(plain):
+                return full_key, plain
+            return None
+
+        r = residues_order[idx]
+        for kbyte in candidates[r]:
+            key[r] = kbyte
+
+            # szybkie sprawdzenie zgodności z prefixem, jeśli reszta r występuje w prefiksie
+            ok = True
+            for pos in range(len(KNOWN_PREFIX)):
+                if pos % L == r:
+                    # oczekiwany bajt plain[pos] to KNOWN_PREFIX[pos]
+                    if (data[pos] ^ kbyte) != KNOWN_PREFIX[pos]:
+                        ok = False
+                        break
+            if not ok:
+                continue
+
+            # małe dodatkowe prune: sprawdź kilka wczesnych odszyfrowanych bajtów (jeśli odszyfrowane)
+            # zbyt drobne, by być kosztownym
+            early_plain = []
+            for pos in range(0, min(len(data), 4*L)):
+                if key[pos % L] is not None:
+                    early_plain.append(data[pos] ^ key[pos % L])
+                else:
+                    early_plain.append(None)
+            # jeśli mamy konkretne wartości, sprawdź czy są drukowalne
+            for val in early_plain:
+                if val is not None and not (32 <= val <= 126):
+                    ok = False
+                    break
+            if not ok:
+                continue
+
+            res = dfs(idx + 1)
+            if res:
+                return res
+            key[r] = None
+
+        return None
+
+    return dfs(0)
+
+# główna pętla prób długości klucza
+for L in range(MIN_KEY, MAX_KEY + 1):
+    res = try_key_length(L)
+    if res:
+        found_key, plaintext = res
+        print("Znaleziono długość klucza:", L)
+        print("Klucz (hex):", found_key.hex())
+        print("Plaintext:", plaintext.decode())
+        break
+else:
+    print("Nie znaleziono klucza w zadanym zakresie długości.")

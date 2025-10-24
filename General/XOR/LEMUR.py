@@ -15,3 +15,11 @@ for x in range(flag.width):
             pixel1[2] ^ pixel2[2]
         )
 flag.save('output.png')
+
+# dziala bo
+# A = lemur XOR K
+# B = flag XOR K
+# output = A XOR B = (lemur XOR K) XOR (flag XOR K)
+# wykorzystujemy przemiennosc 
+# output = (lemur XOR flag) XOR (K XOR K) = (lemur XOR flag) XOR 0
+# output = lemur XOR flag - czyli obraz, gdzie kolorki sa xor

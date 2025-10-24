@@ -1,0 +1,5 @@
+n = 11515195063862318899931685488813747395775516287289682636499965282714637259206269
+h = format(n, "x") # na szesnastkowy bez 0x z przodu
+print(h)
+b = bytes.fromhex(h)
+print(b)
